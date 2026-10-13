@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE nmaprun>
+<?xml-stylesheet href="file:///usr/bin/../share/nmap/nmap.xsl" type="text/xsl"?>
+<!-- Nmap 7.95 scan initiated Tue Oct 13 11:49:32 2026 as: nmap -sT -sV -T3 -p 1-1024 -oX /app/data/scan_results/latest_scan.xml 192.168.0.1 -->
+<nmaprun scanner="nmap" args="nmap -sT -sV -T3 -p 1-1024 -oX /app/data/scan_results/latest_scan.xml 192.168.0.1" start="1791892172" startstr="Tue Oct 13 11:49:32 2026" version="7.95" xmloutputversion="1.05">
+<scaninfo type="connect" protocol="tcp" numservices="1024" services="1-1024"/>
+<verbose level="0"/>
+<debugging level="0"/>
+<hosthint><status state="up" reason="unknown-response" reason_ttl="0"/>
+<address addr="192.168.0.1" addrtype="ipv4"/>
+<hostnames>
+</hostnames>
+</hosthint>
+<host starttime="1791892173" endtime="1791892233"><status state="up" reason="reset" reason_ttl="63"/>
+<address addr="192.168.0.1" addrtype="ipv4"/>
+<hostnames>
+</hostnames>
+<ports><extraports state="filtered" count="1021">
+<extrareasons reason="no-response" count="1021" proto="tcp" ports="1-21,23-79,81-442,444-1024"/>
+</extraports>
+<port protocol="tcp" portid="22"><state state="open" reason="syn-ack" reason_ttl="0"/><service name="ssh" extrainfo="protocol 2.0" servicefp="SF-Port22-TCP:V=7.95%I=7%D=10/13%Time=6ACE1AE4%P=x86_64-pc-linux-gnu%r(NULL,12,&quot;SSH-2\.0-SSH_2\.0\.0\n&quot;);" method="probed" conf="10"/></port>
+<port protocol="tcp" portid="80"><state state="open" reason="syn-ack" reason_ttl="0"/><service name="http" product="HTTP-SERVER-Webs" servicefp="SF-Port80-TCP:V=7.95%I=7%D=10/13%Time=6ACE1AE3%P=x86_64-pc-linux-gnu%r(GetRequest,157,&quot;HTTP/1\.0\x20302\x20Redirect\r\nServer:\x20HTTP-SERVER-Webs\r\nDate:\x20TUE\x20OCT\x2013\x2012:49:55\x202026\r\nContent-Type:\x20text/html\r\nLocation:\x20http://SalleRG-RG/index\.asp\r\n\r\n&lt;html&gt;&lt;head&gt;&lt;/head&gt;&lt;body&gt;\r\n\t\tThis\x20document\x20has\x20moved\x20to\x20a\x20new\x20&lt;a\x20href=\&quot;http://SalleRG-RG/index\.asp\&quot;&gt;location&lt;/a&gt;\.\r\n\t\tPlease\x20update\x20your\x20documents\x20to\x20reflect\x20the\x20new\x20location\.\r\n\t\t&lt;/body&gt;&lt;/html&gt;\r\n\r\n&quot;)%r(X11Probe,105,&quot;HTTP/1\.1\x20400\x20Bad\x20Request\r\nServer:\x20HTTP-SERVER-Webs\r\nDate:\x20TUE\x20OCT\x2013\x2012:50:06\x202026\r\nContent-Type:\x20text/html\r\n\r\n&lt;html&gt;&lt;head&gt;&lt;title&gt;Document\x20Error:\x20Bad\x20Request&lt;/title&gt;&lt;/head&gt;\r\n\t\t&lt;body&gt;&lt;h2&gt;Access\x20Error:\x20Bad\x20Request&lt;/h2&gt;\r\n\t\t&lt;p&gt;Bad\x20request\x20type&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;\r\n\r\n&quot;)%r(FourOhFourRequest,157,&quot;HTTP/1\.0\x20302\x20Redirect\r\nServer:\x20HTTP-SERVER-Webs\r\nDate:\x20TUE\x20OCT\x2013\x2012:50:06\x202026\r\nContent-Type:\x20text/html\r\nLocation:\x20http://SalleRG-RG/login\.asp\r\n\r\n&lt;html&gt;&lt;head&gt;&lt;/head&gt;&lt;body&gt;\r\n\t\tThis\x20document\x20has\x20moved\x20to\x20a\x20new\x20&lt;a\x20href=\&quot;http://SalleRG-RG/login\.asp\&quot;&gt;location&lt;/a&gt;\.\r\n\t\tPlease\x20update\x20your\x20documents\x20to\x20reflect\x20the\x20new\x20location\.\r\n\t\t&lt;/body&gt;&lt;/html&gt;\r\n\r\n&quot;)%r(RPCCheck,105,&quot;HTTP/1\.1\x20400\x20Bad\x20Request\r\nServer:\x20HTTP-SERVER-Webs\r\nDate:\x20TUE\x20OCT\x2013\x2012:50:12\x202026\r\nContent-Type:\x20text/html\r\n\r\n&lt;html&gt;&lt;head&gt;&lt;title&gt;Document\x20Error:\x20Bad\x20Request&lt;/title&gt;&lt;/head&gt;\r\n\t\t&lt;body&gt;&lt;h2&gt;Access\x20Error:\x20Bad\x20Request&lt;/h2&gt;\r\n\t\t&lt;p&gt;Bad\x20request\x20type&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;\r\n\r\n&quot;)%r(DNSVersionBindReqTCP,105,&quot;HTTP/1\.1\x20400\x20Bad\x20Request\r\nServer:\x20HTTP-SERVER-Webs\r\nDate:\x20TUE\x20OCT\x2013\x2012:50:14\x202026\r\nContent-Type:\x20text/html\r\n\r\n&lt;html&gt;&lt;head&gt;&lt;title&gt;Document\x20Error:\x20Bad\x20Request&lt;/title&gt;&lt;/head&gt;\r\n\t\t&lt;body&gt;&lt;h2&gt;Access\x20Error:\x20Bad\x20Request&lt;/h2&gt;\r\n\t\t&lt;p&gt;Bad\x20HTTP\x20request&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;\r\n\r\n&quot;);" method="probed" conf="10"/></port>
+<port protocol="tcp" portid="443"><state state="open" reason="syn-ack" reason_ttl="0"/><service name="https" tunnel="ssl" method="probed" conf="10"/></port>
+</ports>
+<times srtt="27322" rttvar="20227" to="108230"/>
+</host>
+<runstats><finished time="1791892233" timestr="Tue Oct 13 11:50:33 2026" summary="Nmap done at Tue Oct 13 11:50:33 2026; 1 IP address (1 host up) scanned in 61.53 seconds" elapsed="61.53" exit="success"/><hosts up="1" down="0" total="1"/>
+</runstats>
+</nmaprun>

@@ -1,0 +1,9 @@
+# Explicit direct and transitive dependencies for reproducible Docker builds
+numpy==1.26.4
+scipy==1.13.1
+networkx==3.3
+pandas==2.2.3
+scikit-fuzzy==0.5.0
+streamlit==1.39.0
+matplotlib==3.9.2
+pytest==8.3.3
