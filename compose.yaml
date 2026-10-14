@@ -1,0 +1,11 @@
+services:
+  aiport-detection:
+    build:
+      context: .
+    container_name: aiport-detection
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data
+      - .:/app
+    restart: unless-stopped

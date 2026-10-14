@@ -1,432 +1,282 @@
 from __future__ import annotations
 
-import base64
+import ipaddress
 import sys
 import time
 from datetime import datetime
+from html import escape
 from pathlib import Path
-
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src"))
 
 import pandas as pd
 import streamlit as st
 
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+
 from fuzzynmap.detector import analyze_xml
 from fuzzynmap.scanner import scan_target
 
-
 st.set_page_config(
-    page_title="Fuzzynmap | Network Risk",
+    page_title="Fuzzynmap · Network Risk",
     page_icon="◈",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
 
-# Keep the uploaded banner image at: Fuzzynmap/assets/cover.png
-HERO_IMAGE = ROOT / "assets" / "cover.png"
+DASHBOARD_DIR = Path(__file__).resolve().parent
+CSS_PATH = DASHBOARD_DIR / "style.css"
+if CSS_PATH.exists():
+    st.markdown(f"<style>{CSS_PATH.read_text(encoding='utf-8')}</style>", unsafe_allow_html=True)
+
+if "light_mode" not in st.session_state:
+    st.session_state.light_mode = False
+
+# Apply the selected theme before rendering the main page.
+if st.session_state.light_mode:
+    st.markdown("""
+    <style>:root{
+      --bg:#f7f8fc;--surface:#ffffff;--surface-raised:#f0f3fa;--ink:#172033;
+      --muted:#596780;--line:#dfe5ef;--accent:#4c78ff;--accent-strong:#315ee8;
+      --hero-a:#edf2ff;--hero-b:#f4f7ff;--grid:rgba(76,120,255,.08);
+      --shadow:0 12px 34px rgba(30,48,85,.08);--success:#17845d;
+      --danger:#d44961;--warning:#b87813;--input:#ffffff;--chart-track:#e7ebf4;
+    }</style>
+    """, unsafe_allow_html=True)
+else:
+    st.markdown("""
+    <style>:root{
+      --bg:#0c1018;--surface:#141b27;--surface-raised:#1b2635;--ink:#edf3ff;
+      --muted:#9cabc2;--line:#29364a;--accent:#79a7ff;--accent-strong:#a1c2ff;
+      --hero-a:#15243a;--hero-b:#1a1e32;--grid:rgba(121,167,255,.09);
+      --shadow:0 14px 36px rgba(0,0,0,.2);--success:#64d6a0;
+      --danger:#ff748a;--warning:#f3bd69;--input:#101722;--chart-track:#263247;
+    }</style>
+    """, unsafe_allow_html=True)
 
 
-def image_background_css(image_path: Path) -> str:
-    """Return a CSS background image with a dark overlay, or a fallback."""
-    if not image_path.is_file():
-        return "background: linear-gradient(110deg, #101015, #38204c);"
+def validate_target(value: str) -> tuple[bool, str]:
+    value = (value or "").strip()
+    if not value:
+        return False, "Enter an IP address, CIDR network, or hostname."
+    if value.startswith("-") or any(ch.isspace() for ch in value):
+        return False, "Enter one target only. Spaces and Nmap arguments are not accepted."
+    try:
+        ipaddress.ip_address(value)
+        return True, ""
+    except ValueError:
+        pass
+    if "/" in value:
+        try:
+            ipaddress.ip_network(value, strict=True)
+            return True, ""
+        except ValueError:
+            return False, "Invalid network/mask. Use a network address such as 192.168.1.0/24."
+    if "://" in value or "/" in value or ":" in value:
+        return False, "Enter a hostname or IP/CIDR, not a URL or host:port."
+    hostname = value.rstrip(".")
+    labels = hostname.split(".")
+    if len(hostname) > 253 or not all(
+        label and len(label) <= 63 and label[0].isalnum() and label[-1].isalnum()
+        and all(ch.isalnum() or ch == "-" for ch in label)
+        for label in labels
+    ):
+        return False, "That doesn't look like a valid hostname or IP address."
+    return True, ""
 
-    encoded = base64.b64encode(image_path.read_bytes()).decode("utf-8")
-    return (
-        "background-image: "
-        "linear-gradient(90deg, rgba(8,9,14,.96) 0%, "
-        "rgba(8,9,14,.78) 42%, rgba(8,9,14,.12) 100%), "
-        f"url('data:image/png;base64,{encoded}');"
+
+def section_heading(title: str, subtitle: str = "") -> None:
+    st.markdown(f'<div class="section-heading">{escape(title)}</div>', unsafe_allow_html=True)
+    if subtitle:
+        st.markdown(f'<div class="section-subtitle">{escape(subtitle)}</div>', unsafe_allow_html=True)
+
+
+def metric_card(label: str, value: str | int, note: str, accent: str) -> None:
+    st.markdown(
+        f'<div class="metric-card"><div class="metric-accent {accent}"></div>'
+        f'<div class="metric-label">{escape(label)}</div><div class="metric-value">{escape(str(value))}</div>'
+        f'<div class="metric-note">{escape(note)}</div></div>',
+        unsafe_allow_html=True,
     )
 
 
-hero_background = image_background_css(HERO_IMAGE)
+# Compact product header. The theme control is part of the page, not the Streamlit sidebar.
+brand_col, spacer_col, theme_col = st.columns([2.5, 5.4, 1.6], vertical_alignment="center")
+with brand_col:
+    st.markdown(
+        '<div class="brand"><div class="brand-mark">◈</div><div><div class="brand-name">Fuzzynmap</div>'
+        '<div class="brand-caption">NETWORK INTELLIGENCE</div></div></div>',
+        unsafe_allow_html=True,
+    )
+with theme_col:
+    st.toggle("Light theme", key="light_mode", help="Switch between dark and light mode.")
 
+# The scan panel is deliberately the first major element users encounter.
 st.markdown(
-    f"""
-    <style>
-      :root {{
-        --cream: #fff2e2;
-        --purple: #38204c;
-        --muted: #7c7698;
-        --lavender: #b2acbd;
-      }}
-
-      .stApp {{
-        background: #fff2e2;
-        color: #38204c;
-      }}
-
-      [data-testid="stHeader"] {{
-        background: rgba(255, 242, 226, 0.92);
-      }}
-
-      h1, h2, h3,
-      [data-testid="stMetricValue"],
-      [data-testid="stMetricLabel"] {{
-        color: #38204c !important;
-      }}
-
-      p, label, .stCaption,
-      [data-testid="stMarkdownContainer"] {{
-        color: #7c7698;
-      }}
-
-      /* Website-style banner at the very top */
-      .fuzzy-hero {{
-        box-sizing: border-box;
-        position: relative;
-        overflow: hidden;
-        min-height: 245px;
-        padding: 1.7rem 2rem;
-        border: 1px solid rgba(178, 172, 189, 0.45);
-        border-radius: 18px;
-        background-color: #101015;
-        background-size: cover;
-        background-position: center 48%;
-        background-repeat: no-repeat;
-        margin: 0 0 1.8rem 0;
-        display: flex;
-        flex-direction: column;
-        justify-content: space-between;
-        box-shadow: 0 8px 28px rgba(56, 32, 76, 0.12);
-      }}
-
-      .fuzzy-brand {{
-        color: #fff2e2;
-        font-size: clamp(2rem, 3.5vw, 2.65rem);
-        font-weight: 800;
-        letter-spacing: -0.04em;
-        line-height: 1.05;
-        margin: 0;
-      }}
-
-      .fuzzy-kicker {{
-        color: #d0c5df;
-        font-size: 0.72rem;
-        font-weight: 700;
-        letter-spacing: 0.16em;
-        text-transform: uppercase;
-        margin-top: 0.55rem;
-      }}
-
-      .fuzzy-headline {{
-        color: #fff2e2;
-        font-size: clamp(1.35rem, 2.6vw, 2rem);
-        font-weight: 700;
-        line-height: 1.15;
-        margin: 1.8rem 0 0.45rem 0;
-      }}
-
-      .fuzzy-copy {{
-        color: #e0d9e7;
-        font-size: 0.92rem;
-        line-height: 1.55;
-        max-width: 590px;
-        margin: 0;
-      }}
-
-      div[data-testid="stTextInput"] input {{
-        background: #fffaf4;
-        color: #38204c;
-        border-color: #b2acbd;
-        border-radius: 10px;
-      }}
-
-      div.stButton > button,
-      div[data-testid="stFormSubmitButton"] button,
-      div[data-testid="stDownloadButton"] button {{
-        background: #38204c;
-        color: #fff2e2;
-        border: 1px solid #38204c;
-        border-radius: 10px;
-        font-weight: 700;
-        min-height: 2.8rem;
-      }}
-
-      div.stButton > button:hover,
-      div[data-testid="stFormSubmitButton"] button:hover,
-      div[data-testid="stDownloadButton"] button:hover {{
-        background: #7c7698;
-        border-color: #7c7698;
-        color: #fff2e2;
-      }}
-
-      [data-testid="stMetric"] {{
-        background: rgba(178, 172, 189, 0.18);
-        border: 1px solid #b2acbd;
-        padding: 1rem;
-        border-radius: 14px;
-      }}
-
-      [data-testid="stDataFrame"] {{
-        border: 1px solid #b2acbd;
-        border-radius: 12px;
-      }}
-
-      .verdict {{
-        background: #fffaf4;
-        border-left: 6px solid #38204c;
-        border-radius: 10px;
-        padding: 1rem 1.2rem;
-        color: #38204c;
-        margin: 0.5rem 0 1rem;
-      }}
-
-      .small-note {{
-        color: #7c7698;
-        font-size: 0.86rem;
-      }}
-
-      footer {{ visibility: hidden; }}
-
-      @media (max-width: 640px) {{
-        .fuzzy-hero {{
-          min-height: 220px;
-          padding: 1.25rem;
-          background-position: 62% center;
-        }}
-      }}
-    </style>
-
-    <header class="fuzzy-hero" style="{hero_background}">
-      <div>
-        <h1 class="fuzzy-brand">Fuzzynmap</h1>
-        <div class="fuzzy-kicker">Network security · Risk intelligence</div>
-      </div>
-      <div>
-        <div class="fuzzy-headline">See your network. Understand your risk.</div>
-        <p class="fuzzy-copy">
-          Discover exposed services, analyze your network, and understand
-          your security risk with fuzzy-logic assessment.
-        </p>
-      </div>
-    </header>
-    """,
+    '<section class="scan-hero"><div class="scan-kicker"><span class="live-dot"></span> AUTHORIZED NETWORK ASSESSMENT</div>'
+    '<h1>Know what is exposed.<br><span>Understand why it matters.</span></h1>'
+    '<p>Scan a host or network, inspect discovered services, and review explainable fuzzy-risk scores.</p></section>',
     unsafe_allow_html=True,
 )
-
-st.markdown("### Scan a target")
-st.caption(
-    "Use an IP address, hostname, or CIDR network that you own or have "
-    "explicit permission to assess."
-)
-
+section_heading("Launch a scan", "Start with one IP address or scan an authorized CIDR network.")
 with st.form("scan_form", clear_on_submit=False):
-    target = st.text_input(
-        "Target IP or network",
-        placeholder="e.g. 192.168.1.10 or 192.168.1.0/24",
-        help=(
-            "The scan checks TCP ports 1–1024 and identifies available "
-            "service/version information."
-        ),
-    ).strip()
-    submitted = st.form_submit_button("Run network scan", use_container_width=True)
+    input_col, button_col = st.columns([4, 1.25], vertical_alignment="bottom")
+    with input_col:
+        target = st.text_input(
+            "Target IP, hostname, or CIDR",
+            placeholder="192.168.1.1  /  192.168.1.0/24  /  localhost",
+            help="A single IP scans one host. A CIDR such as 192.168.1.0/24 scans that network.",
+        ).strip()
+    with button_col:
+        submitted = st.form_submit_button("Run scan  →", use_container_width=True)
+
+st.markdown(
+    '<div class="microcopy">Only scan devices and networks you own or have explicit permission to assess.</div>',
+    unsafe_allow_html=True,
+)
 
 if "scan_history" not in st.session_state:
     st.session_state.scan_history = []
 
 if submitted:
-    if not target:
-        st.error("Enter an IP address, hostname, or network before starting the scan.")
+    valid, reason = validate_target(target)
+    if not valid:
+        st.error(reason)
     else:
-        scan_path = ROOT / "data" / "scan_results" / "latest_scan.xml"
-        started_at = datetime.now().astimezone()
-        start_clock = time.perf_counter()
+        output_dir = ROOT / "data" / "scan_results"
+        output_path = output_dir / "latest_scan.xml"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            output_path.unlink(missing_ok=True)
+        except OSError as exc:
+            st.error(f"Could not clear previous scan output: {exc}")
+            st.stop()
 
-        with st.spinner(f"Scanning {target}. This can take a little while…"):
-            try:
-                scan_target(target, scan_path)
-                results = analyze_xml(scan_path)
-                completed_at = datetime.now().astimezone()
-                duration = time.perf_counter() - start_clock
-                timestamp = completed_at.strftime("%Y-%m-%d %H:%M:%S %Z").strip()
-
-                if results.empty:
-                    st.session_state.latest_scan = {
-                        "target": target,
-                        "timestamp": timestamp,
-                        "duration": duration,
-                        "results": results,
-                        "message": (
-                            "The scan completed, but no port results were "
-                            "returned for the selected range."
-                        ),
-                    }
-                else:
-                    results.insert(0, "scan_time", timestamp)
-                    results.insert(1, "target", target)
-                    results["fuzzy_risk_percent"] = results["risk_score"].round(1).map(
-                        lambda value: f"{value:.1f}%"
-                    )
-
-                    st.session_state.latest_scan = {
-                        "target": target,
-                        "timestamp": timestamp,
-                        "duration": duration,
-                        "results": results,
-                        "message": "",
-                    }
-
-                    st.session_state.scan_history.insert(
-                        0,
-                        {
-                            "Scan time": timestamp,
-                            "Target": target,
-                            "Ports returned": int(len(results)),
-                            "Open ports": int(
-                                (results["state"].str.lower() == "open").sum()
-                            ),
-                            "High risk": int((results["risk_level"] == "High").sum()),
-                            "Duration (s)": round(duration, 1),
-                        },
-                    )
-
-                st.rerun()
-            except Exception as exc:
-                st.error(f"Scan failed: {exc}")
-
-scan = st.session_state.get("latest_scan")
-
-if scan:
-    st.divider()
-    st.markdown("### Scan outcome")
-    st.caption(
-        f"Target: {scan['target']} · Completed: {scan['timestamp']} · "
-        f"Duration: {scan['duration']:.1f} seconds"
-    )
-
-    results = scan["results"]
-
-    if results.empty:
-        st.info(scan.get("message") or "No port results were returned.")
-    else:
-        open_results = results[results["state"].str.lower() == "open"]
-        high_count = int((results["risk_level"] == "High").sum())
-        medium_count = int((results["risk_level"] == "Medium").sum())
-        low_count = int((results["risk_level"] == "Low").sum())
-        total_open = len(open_results)
-
-        metric1, metric2, metric3, metric4 = st.columns(4)
-        metric1.metric("Ports identified", len(results))
-        metric2.metric("Open ports", total_open)
-        metric3.metric("High-risk findings", high_count)
-        metric4.metric("Scan duration", f"{scan['duration']:.1f}s")
-
-        if high_count:
-            verdict = (
-                f"Priority review recommended: {high_count} high-risk port "
-                "finding(s) were identified. Review the services and restrict "
-                "exposure where appropriate."
-            )
-        elif medium_count:
-            verdict = (
-                f"Moderate exposure detected: {medium_count} medium-risk "
-                "finding(s) were identified. Review whether each service needs "
-                "to be reachable."
-            )
-        elif total_open:
-            verdict = (
-                "No high-risk findings were scored in this scan. "
-                f"{total_open} open port(s) were identified and should still "
-                "be reviewed against your network's intended configuration."
-            )
-        else:
-            verdict = (
-                "No open ports were identified in the scanned TCP range. "
-                "This does not guarantee that the target has no exposed "
-                "services outside the scanned range."
-            )
-
-        st.markdown(
-            f'<div class="verdict"><strong>Assessment</strong><br>{verdict}</div>',
+        started = time.perf_counter()
+        status_slot = st.empty()
+        status_slot.markdown(
+            f'<div class="scan-status"><span class="spinner-dot"></span><div><b>Scanning {escape(target)}</b>'
+            '<small>Nmap is running. Large networks can take longer than a single host.</small></div></div>',
             unsafe_allow_html=True,
         )
-        st.caption(
-            "Fuzzy risk percentages are heuristic scores, not probabilities "
-            "that a port is exploitable or proof of a vulnerability."
+        try:
+            scan_target(target, output_path)
+            if not output_path.is_file() or output_path.stat().st_size == 0:
+                raise RuntimeError("Nmap did not create a non-empty XML result.")
+            results = analyze_xml(output_path)
+            duration = time.perf_counter() - started
+            timestamp = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S %Z").strip()
+            if not results.empty:
+                results.insert(0, "scan_time", timestamp)
+                results.insert(1, "target", target)
+                results["fuzzy_risk_percent"] = results["risk_score"].round(1).map(lambda x: f"{x:.1f}%")
+            st.session_state.latest_scan = {
+                "target": target, "timestamp": timestamp, "duration": duration, "results": results,
+                "message": "Nmap completed but returned no individual port rows. Ports may be filtered or outside the configured range." if results.empty else "",
+            }
+            st.session_state.scan_history.insert(0, {
+                "Time": timestamp, "Target": target, "Port rows": len(results),
+                "Open ports": int((results["state"].astype(str).str.lower() == "open").sum()) if not results.empty else 0,
+                "Duration": f"{duration:.1f}s",
+            })
+            st.session_state.scan_history = st.session_state.scan_history[:8]
+            status_slot.empty()
+            st.rerun()
+        except Exception as exc:
+            status_slot.empty()
+            st.error(f"Scan failed: {exc}")
+
+scan = st.session_state.get("latest_scan")
+if scan:
+    st.markdown('<div class="result-divider"></div>', unsafe_allow_html=True)
+    section_heading("Scan report", "Target is shown once here; host IPs in the table are the hosts Nmap reported.")
+    st.markdown(
+        f'<div class="scan-meta"><span class="meta-label">TARGET</span><strong>{escape(scan["target"])}</strong>'
+        f'<span class="meta-separator">/</span><span>{escape(scan["timestamp"])}</span>'
+        f'<span class="meta-separator">/</span><span>{scan["duration"]:.1f} sec</span></div>',
+        unsafe_allow_html=True,
+    )
+    results = scan["results"]
+    if results.empty:
+        st.info(scan.get("message") or "No individual port records were returned.")
+    else:
+        open_rows = results[results["state"].astype(str).str.lower() == "open"].copy()
+        high = int((results["risk_level"] == "High").sum())
+        medium = int((results["risk_level"] == "Medium").sum())
+        low = int((results["risk_level"] == "Low").sum())
+        c1, c2, c3, c4 = st.columns(4)
+        with c1: metric_card("PORT RECORDS", len(results), "Returned by Nmap", "blue")
+        with c2: metric_card("OPEN PORTS", len(open_rows), "Accepting connections", "green")
+        with c3: metric_card("HIGH RISK", high, "Review these first", "red")
+        with c4: metric_card("DURATION", f'{scan["duration"]:.1f}s', "Elapsed scan time", "purple")
+
+        if high:
+            assessment = f"{high} high-risk record(s) need review. Confirm whether the exposed services are required."
+            tone = "red"
+        elif medium:
+            assessment = f"{medium} medium-risk record(s). Check access controls and whether each service is necessary."
+            tone = "amber"
+        else:
+            assessment = "No high or medium fuzzy-risk records were scored. This does not prove the host is secure."
+            tone = "green"
+        st.markdown(
+            f'<div class="assessment {tone}"><span class="assessment-symbol">i</span><div><b>What this scan suggests</b>'
+            f'<p>{escape(assessment)}</p><small>Fuzzy scores are heuristic triage indicators, not probabilities of exploitation or proof of vulnerabilities.</small></div></div>',
+            unsafe_allow_html=True,
         )
 
-        st.markdown("### Port-by-port results")
-        risk_filter = st.multiselect(
-            "Filter by risk level",
-            options=["High", "Medium", "Low"],
-            default=["High", "Medium", "Low"],
-        )
-        filtered = results[results["risk_level"].isin(risk_filter)].copy()
+        chart_col, explain_col = st.columns([1.25, 1], gap="large")
+        with chart_col:
+            section_heading("Risk by open port", "A readable 0–100 score for each open port.")
+            if open_rows.empty:
+                st.markdown('<div class="empty-state">No open ports to visualize in this scan.</div>', unsafe_allow_html=True)
+            else:
+                bars = []
+                for _, row in open_rows.sort_values("risk_score", ascending=False).iterrows():
+                    port = escape(str(row.get("port", "?")))
+                    service = escape(str(row.get("service") or "unknown"))
+                    score = max(0.0, min(100.0, float(row.get("risk_score", 0))))
+                    category = "high" if score >= 65 else "medium" if score >= 35 else "low"
+                    bars.append(
+                        f'<div class="score-item"><div class="score-top"><span>{port} <i>·</i> {service}</span>'
+                        f'<b>{score:.1f}<small>/100</small></b></div><div class="score-track"><div class="score-fill {category}" style="width:{score}%"></div></div></div>'
+                    )
+                st.markdown('<div class="panel-card">' + "".join(bars) + '</div>', unsafe_allow_html=True)
+        with explain_col:
+            section_heading("How fuzzy logic helps", "A transparent triage aid—not an AI vulnerability verdict.")
+            st.markdown(
+                '<div class="panel-card fuzzy-explainer">'
+                '<div class="fuzzy-step"><span>01</span><div><b>Inputs</b><p>Port number, open/closed state, and service risk.</p></div></div>'
+                '<div class="fuzzy-step"><span>02</span><div><b>Fuzzy rules</b><p>Overlapping low, medium, and high membership functions combine the signals.</p></div></div>'
+                '<div class="fuzzy-step"><span>03</span><div><b>Score</b><p>The output is a 0–100 heuristic used to prioritize manual review.</p></div></div>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
 
-        display_columns = [
-            "scan_time",
-            "target",
-            "host",
-            "address",
-            "port",
-            "protocol",
-            "state",
-            "service",
-            "product",
-            "version",
-            "fuzzy_risk_percent",
-            "risk_level",
-        ]
-        display_names = {
-            "scan_time": "Scan time",
-            "target": "Target",
-            "host": "Host",
-            "address": "IP address",
-            "port": "Port",
-            "protocol": "Protocol",
-            "state": "State",
-            "service": "Service",
-            "product": "Product",
-            "version": "Version",
-            "fuzzy_risk_percent": "Fuzzy risk score",
-            "risk_level": "Risk level",
-        }
-
-        visible = filtered[
-            [column for column in display_columns if column in filtered.columns]
-        ].rename(columns=display_names)
-        st.dataframe(visible, use_container_width=True, hide_index=True)
-
-        csv_data = (
-            filtered.drop(columns=["fuzzy_risk_percent"], errors="ignore")
-            .to_csv(index=False)
-            .encode("utf-8")
-        )
+        section_heading("Port inventory", "Filter and inspect discovered rows. The target is not repeated in every row.")
+        filter_col, search_col = st.columns([1, 2])
+        with filter_col:
+            selected_risks = st.multiselect("Risk levels", ["High", "Medium", "Low"], default=["High", "Medium", "Low"])
+        with search_col:
+            search = st.text_input("Search inventory", placeholder="Host, service, state, or port…")
+        filtered = results[results["risk_level"].isin(selected_risks)].copy()
+        if search:
+            mask = filtered.astype(str).apply(lambda column: column.str.contains(search, case=False, na=False)).any(axis=1)
+            filtered = filtered[mask]
+        cols = ["scan_time", "host", "address", "port", "protocol", "state", "service","fuzzy_risk_percent", "risk_level"]
+        labels = {"scan_time": "Scan time", "host": "Host", "address": "Host IP", "port": "Port", "protocol": "Protocol", "state": "State", "service": "Service", "fuzzy_risk_percent": "Fuzzy score", "risk_level": "Risk level"}
+        st.dataframe(filtered[[col for col in cols if col in filtered.columns]].rename(columns=labels), use_container_width=True, hide_index=True)
         st.download_button(
-            "Download scan results (CSV)",
-            data=csv_data,
-            file_name="fuzzynmap_scan_results.csv",
+            "↓  Export filtered CSV",
+            data=filtered.drop(columns=["fuzzy_risk_percent"], errors="ignore").to_csv(index=False).encode("utf-8"),
+            file_name="fuzzynmap-results.csv",
             mime="text/csv",
         )
 
-        if not open_results.empty:
-            st.markdown("### Fuzzy risk scores")
-            chart_data = open_results[["port", "risk_score"]].copy()
-            chart_data["Port"] = (
-                chart_data["port"].astype(str)
-                + " · "
-                + open_results["service"].fillna("unknown").astype(str)
-            )
-            chart_data = chart_data.rename(
-                columns={"risk_score": "Risk score (%)"}
-            ).set_index("Port")[["Risk score (%)"]]
-            st.bar_chart(chart_data, y="Risk score (%)", color="#7c7698")
-
 if st.session_state.scan_history:
-    st.divider()
-    st.markdown("### Recent scans")
-    st.dataframe(
-        pd.DataFrame(st.session_state.scan_history),
-        use_container_width=True,
-        hide_index=True,
-    )
+    section_heading("Recent scans")
+    st.dataframe(pd.DataFrame(st.session_state.scan_history), use_container_width=True, hide_index=True)
 
 st.markdown(
-    '<p class="small-note">Scan only networks you own or have explicit permission '
-    "to assess. Fuzzynmap provides a heuristic triage aid, not a substitute for "
-    "security verification.</p>",
+    '<footer class="app-footer"><span>FUZZYNMAP</span> · Use only on systems you are authorized to assess.</footer>',
     unsafe_allow_html=True,
 )

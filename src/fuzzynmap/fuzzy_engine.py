@@ -4,8 +4,9 @@ from __future__ import annotations
 import numpy as np
 import skfuzzy as fuzz
 from skfuzzy import control as ctrl
+from functools import lru_cache
 
-
+@lru_cache(maxsize=1)
 def _build_system():
     port = ctrl.Antecedent(np.arange(0, 65536, 1), "port")
     service_risk = ctrl.Antecedent(np.arange(0, 11, 1), "service_risk")
@@ -23,6 +24,14 @@ def _build_system():
     state_open["closed"] = fuzz.trimf(state_open.universe, [0, 0, 0.5])
     state_open["open"] = fuzz.trimf(state_open.universe, [0.5, 1, 1])
 
+    service_known = ctrl.Antecedent(
+    np.arange(0, 2, 1), "service_known")
+
+    service_known["unknown"] = fuzz.trimf(
+    service_known.universe, [0, 0, 0.5])
+    service_known["known"] = fuzz.trimf(
+    service_known.universe, [0.5, 1, 1])
+
     risk["low"] = fuzz.trimf(risk.universe, [0, 0, 35])
     risk["medium"] = fuzz.trimf(risk.universe, [20, 50, 75])
     risk["high"] = fuzz.trimf(risk.universe, [60, 100, 100])
@@ -33,32 +42,77 @@ def _build_system():
         ctrl.Rule(state_open["open"] & service_risk["medium"], risk["medium"]),
         ctrl.Rule(state_open["open"] & service_risk["high"], risk["high"]),
         ctrl.Rule(state_open["open"] & port["high"] & service_risk["low"], risk["medium"]),
+        ctrl.Rule(state_open["open"] & service_known["unknown"],risk["medium"]),
     ]
     return ctrl.ControlSystem(rules)
 
 
-def service_risk_level(service: str = "", product: str = "", version: str = "", port: int = 0) -> float:
+
+def service_risk_level(
+    service: str = "",
+    product: str = "",
+    version: str = "",
+    port: int = 0,
+) -> float:
     text = f"{service} {product} {version}".lower()
+
+    # Unknown service identity is not proof of risk.
+    if "tcpwrapped" in text or not text.strip():
+        return 3.0
+
     score = 2.0
-    risky_terms = ("telnet", "ftp", "rsh", "rlogin", "vnc", "smb", "microsoft-ds", "redis", "mongodb", "mysql", "postgres")
+
+    risky_terms = (
+        "telnet", "ftp", "rsh", "rlogin", "vnc",
+        "smb", "microsoft-ds", "redis", "mongodb",
+        "mysql", "postgres",
+    )
+
     if any(term in text for term in risky_terms):
         score += 4.0
+
     if any(term in text for term in ("ssl", "tls", "https", "ssh")):
         score -= 0.5
+
     if any(term in text for term in ("old", "outdated", "vulnerable")):
         score += 3.0
+
     if port in (21, 23, 445, 3389, 5900, 6379, 27017):
         score += 2.0
+
     return float(np.clip(score, 0, 10))
 
 
-def score_port(port: int, state: str, service: str = "", product: str = "", version: str = "") -> float:
+
+
+def score_port(
+    port: int,
+    state: str,
+    service: str = "",
+    product: str = "",
+    version: str = "",
+    ) -> float:
     """Return a 0–100 fuzzy score for one parsed port row."""
     is_open = 1.0 if str(state).lower() == "open" else 0.0
-    service_level = service_risk_level(service, product, version, int(port))
+    service_level = service_risk_level(
+        service, product, version, int(port)
+    )
+
+    service_text = f"{service} {product} {version}".lower()
+    is_known = (
+        0.0
+        if "tcpwrapped" in service_text
+        else 1.0
+        if service_text.strip()
+        else 0.0
+    )
+
     simulation = ctrl.ControlSystemSimulation(_build_system())
     simulation.input["port"] = float(np.clip(port, 0, 65535))
     simulation.input["service_risk"] = service_level
     simulation.input["state_open"] = is_open
+    simulation.input["service_known"] = is_known
     simulation.compute()
+
     return round(float(simulation.output["risk"]), 2)
+
