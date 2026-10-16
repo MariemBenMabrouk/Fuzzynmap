@@ -43,10 +43,8 @@ def scan_target(
         if is_network:
             # TCP discovery is more compatible with Docker Desktop than ARP discovery.
             discovery = [
-                "nmap", "-n", "-sn", "-sT", "-T4",
-                "-PS22,80,443,445,3389,8080,8443,8501",
+                "nmap", "-n", "-PE", "-T4",
                 "--max-retries", "1",
-                "--host-timeout", "8s",
                 "-oX", str(discovery_xml),
                 target,
             ]

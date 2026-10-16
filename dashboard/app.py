@@ -114,7 +114,7 @@ with theme_col:
 st.markdown(
     '<section class="scan-hero"><div class="scan-kicker"><span class="live-dot"></span> AUTHORIZED NETWORK ASSESSMENT</div>'
     '<h1>Know what is exposed.<br><span>Understand why it matters.</span></h1>'
-    '<p>Scan a host or network, inspect discovered services, and review explainable fuzzy-risk scores.</p></section>',
+    '</section>',
     unsafe_allow_html=True,
 )
 section_heading("Launch a scan", "Start with one IP address or scan an authorized CIDR network.")
@@ -165,10 +165,6 @@ if submitted:
             results = analyze_xml(output_path)
             duration = time.perf_counter() - started
             timestamp = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S %Z").strip()
-            if not results.empty:
-                results.insert(0, "scan_time", timestamp)
-                results.insert(1, "target", target)
-                results["fuzzy_risk_percent"] = results["risk_score"].round(1).map(lambda x: f"{x:.1f}%")
             st.session_state.latest_scan = {
                 "target": target, "timestamp": timestamp, "duration": duration, "results": results,
                 "message": "Nmap completed but returned no individual port rows. Ports may be filtered or outside the configured range." if results.empty else "",
@@ -188,11 +184,12 @@ if submitted:
 scan = st.session_state.get("latest_scan")
 if scan:
     st.markdown('<div class="result-divider"></div>', unsafe_allow_html=True)
-    section_heading("Scan report", "Target is shown once here; host IPs in the table are the hosts Nmap reported.")
+    section_heading("Scan report", "The target and scan date are shown once above the port inventory.")
     st.markdown(
         f'<div class="scan-meta"><span class="meta-label">TARGET</span><strong>{escape(scan["target"])}</strong>'
-        f'<span class="meta-separator">/</span><span>{escape(scan["timestamp"])}</span>'
-        f'<span class="meta-separator">/</span><span>{scan["duration"]:.1f} sec</span></div>',
+        f'<span class="meta-separator">/</span><span class="meta-label">SCAN DATE</span>'
+        f'<span>{escape(scan["timestamp"])}</span><span class="meta-separator">/</span>'
+        f'<span>{scan["duration"]:.1f} sec</span></div>',
         unsafe_allow_html=True,
     )
     results = scan["results"]
@@ -226,21 +223,27 @@ if scan:
 
         chart_col, explain_col = st.columns([1.25, 1], gap="large")
         with chart_col:
-            section_heading("Risk by open port", "A readable 0–100 score for each open port.")
-            if open_rows.empty:
-                st.markdown('<div class="empty-state">No open ports to visualize in this scan.</div>', unsafe_allow_html=True)
+            average_risk = float(results["risk_score"].mean())
+            average_risk = max(0.0, min(100.0, average_risk))
+            if average_risk >= 65:
+                gauge_color = "var(--danger)"
+                average_level = "High"
+            elif average_risk >= 35:
+                gauge_color = "var(--warning)"
+                average_level = "Medium"
             else:
-                bars = []
-                for _, row in open_rows.sort_values("risk_score", ascending=False).iterrows():
-                    port = escape(str(row.get("port", "?")))
-                    service = escape(str(row.get("service") or "unknown"))
-                    score = max(0.0, min(100.0, float(row.get("risk_score", 0))))
-                    category = "high" if score >= 65 else "medium" if score >= 35 else "low"
-                    bars.append(
-                        f'<div class="score-item"><div class="score-top"><span>{port} <i>·</i> {service}</span>'
-                        f'<b>{score:.1f}<small>/100</small></b></div><div class="score-track"><div class="score-fill {category}" style="width:{score}%"></div></div></div>'
-                    )
-                st.markdown('<div class="panel-card">' + "".join(bars) + '</div>', unsafe_allow_html=True)
+                gauge_color = "var(--success)"
+                average_level = "Low"
+            section_heading("Average network risk", "Mean fuzzy-risk score across all returned port records.")
+            st.markdown(
+                f'<div class="risk-gauge-card"><div class="risk-gauge" '
+                f'style="--risk-percent:{average_risk:.1f};--gauge-color:{gauge_color}">'
+                f'<div class="risk-gauge-center"><strong>{average_risk:.1f}%</strong>'
+                f'<span>AVERAGE RISK</span></div></div>'
+                f'<div class="risk-gauge-level {average_level.lower()}">{average_level} average risk</div>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
         with explain_col:
             section_heading("How fuzzy logic helps", "A transparent triage aid—not an AI vulnerability verdict.")
             st.markdown(
@@ -252,22 +255,27 @@ if scan:
                 unsafe_allow_html=True,
             )
 
-        section_heading("Port inventory", "Filter and inspect discovered rows. The target is not repeated in every row.")
+        section_heading("Port inventory", "Inspect discovered ports and services. Per-port risk scores are summarized above.")
+        inventory_columns = ["port", "protocol", "state", "service", "product", "version", "extrainfo"]
+        if "/" in str(scan["target"]):
+            inventory_columns.insert(0, "host")
+        inventory_columns = [column for column in inventory_columns if column in results.columns]
+        inventory = results[inventory_columns].copy()
+        available_states = sorted(inventory["state"].dropna().astype(str).unique())
         filter_col, search_col = st.columns([1, 2])
         with filter_col:
-            selected_risks = st.multiselect("Risk levels", ["High", "Medium", "Low"], default=["High", "Medium", "Low"])
+            selected_states = st.multiselect("Port states", available_states, default=available_states)
         with search_col:
             search = st.text_input("Search inventory", placeholder="Host, service, state, or port…")
-        filtered = results[results["risk_level"].isin(selected_risks)].copy()
+        filtered = inventory[inventory["state"].astype(str).isin(selected_states)].copy()
         if search:
             mask = filtered.astype(str).apply(lambda column: column.str.contains(search, case=False, na=False)).any(axis=1)
             filtered = filtered[mask]
-        cols = ["scan_time", "host", "address", "port", "protocol", "state", "service","fuzzy_risk_percent", "risk_level"]
-        labels = {"scan_time": "Scan time", "host": "Host", "address": "Host IP", "port": "Port", "protocol": "Protocol", "state": "State", "service": "Service", "fuzzy_risk_percent": "Fuzzy score", "risk_level": "Risk level"}
-        st.dataframe(filtered[[col for col in cols if col in filtered.columns]].rename(columns=labels), use_container_width=True, hide_index=True)
+        labels = {"host": "Host / IP", "port": "Port", "protocol": "Protocol", "state": "State", "service": "Service", "product": "Product", "version": "Version", "extrainfo": "Extra info"}
+        st.dataframe(filtered.rename(columns=labels), use_container_width=True, hide_index=True)
         st.download_button(
             "↓  Export filtered CSV",
-            data=filtered.drop(columns=["fuzzy_risk_percent"], errors="ignore").to_csv(index=False).encode("utf-8"),
+            data=filtered.rename(columns=labels).to_csv(index=False).encode("utf-8"),
             file_name="fuzzynmap-results.csv",
             mime="text/csv",
         )
