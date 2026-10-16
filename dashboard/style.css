@@ -2,7 +2,7 @@
 
 :root {
   --bg: #0c1018;
-  --surface: #141b27;
+  --surface: #3a4f74;
   --raised: #1b2635;
   --ink: #edf3ff;
   --muted: #9cabc2;
@@ -13,10 +13,10 @@
   --grid: rgba(121,167,255,.08);
   --input: #0c1018;
   --track: #263247;
-  --success: #64d6a0;
-  --warning: #f3bd69;
-  --danger: #ff748a;
-  --shadow: 0 12px 32px rgba(0,0,0,.18);
+  --success: #c288bd;
+  --warning: #ce56baaf;
+  --danger: #5089af;
+  --shadow: 0 12px 32px rgba(123, 174, 187, 0.925);
 }
 
 html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
@@ -103,9 +103,9 @@ div[data-testid="stFormSubmitButton"] button:disabled { background: var(--accent
 
 .metric-card { position: relative; min-height: 112px; overflow: hidden; padding: 15px 16px; box-shadow: var(--shadow); }
 .metric-accent { position: absolute; top: 0; bottom: 0; left: 0; width: 3px; }
-.metric-accent.blue { background: #79a7ff; }
-.metric-accent.green { background: #64d6a0; }
-.metric-accent.red { background: #ff748a; }
+.metric-accent.blue { background: #803283; }
+.metric-accent.green { background: #2ba0a8; }
+.metric-accent.red { background: #e284d3; }
 .metric-accent.purple { background: #b8a1ff; }
 .metric-label { color: var(--muted); font: 700 .63rem 'DM Mono', monospace; letter-spacing: .07em; }
 .metric-value { margin-top: 9px; color: var(--ink); font: 800 1.8rem 'Manrope', sans-serif; letter-spacing: -.04em; line-height: 1.15; }
@@ -121,18 +121,15 @@ div[data-testid="stFormSubmitButton"] button:disabled { background: var(--accent
 
 .panel-card, .empty-state { padding: 16px; box-shadow: var(--shadow); }
 .empty-state { color: var(--muted); font-size: .8rem; }
-.score-item { margin: 2px 0 17px; }
-.score-item:last-child { margin-bottom: 1px; }
-.score-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; font-size: .79rem; }
-.score-top span { overflow-wrap: anywhere; color: var(--ink); font-weight: 600; }
-.score-top i { padding: 0 3px; color: var(--muted); font-style: normal; }
-.score-top b { color: var(--ink); font: 700 .8rem 'DM Mono', monospace; white-space: nowrap; }
-.score-top small { color: var(--muted); font-size: .65rem; font-weight: 400; }
-.score-track { height: 8px; overflow: hidden; border-radius: 99px; background: var(--track); }
-.score-fill { height: 100%; border-radius: 99px; }
-.score-fill.high { background: var(--danger); }
-.score-fill.medium { background: var(--warning); }
-.score-fill.low { background: var(--success); }
+.risk-gauge-card { display: flex; width: min(100%, 280px); aspect-ratio: 1; margin-inline: auto; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 18px; border: 1px solid var(--gauge-color); border-radius: 50%; background: var(--surface); box-shadow: var(--shadow); }
+.risk-gauge { display: grid; width: 170px; aspect-ratio: 1; place-items: center; border-radius: 50%; background: conic-gradient(from -90deg, var(--gauge-color) calc(var(--risk-percent) * 1%), var(--line) 0); }
+.risk-gauge-center { display: flex; width: 132px; aspect-ratio: 1; flex-direction: column; align-items: center; justify-content: center; border-radius: 50%; background: var(--surface); }
+.risk-gauge-center strong { color: var(--ink); font: 800 1.7rem 'Manrope', sans-serif; letter-spacing: -.04em; }
+.risk-gauge-center span { margin-top: 3px; color: var(--muted); font: 700 .58rem 'DM Mono', monospace; letter-spacing: .08em; }
+.risk-gauge-level { font-size: .78rem; font-weight: 700; }
+.risk-gauge-level.high { color: var(--danger); }
+.risk-gauge-level.medium { color: var(--warning); }
+.risk-gauge-level.low { color: var(--success); }
 
 .fuzzy-step { display: flex; gap: 11px; padding: 11px 0; border-bottom: 1px solid var(--line); }
 .fuzzy-step:last-child { padding-bottom: 0; border-bottom: 0; }
@@ -141,7 +138,37 @@ div[data-testid="stFormSubmitButton"] button:disabled { background: var(--accent
 .fuzzy-step b { color: var(--ink); font-size: .8rem; }
 .fuzzy-step p { margin: 3px 0 0; font-size: .73rem; line-height: 1.5; }
 
-[data-testid="stDataFrame"] { overflow: hidden; border: 1px solid var(--line); border-radius: 11px; }
+/* ---------- Tables (theme-aware: uses the variables app.py sets for light/dark) ---------- */
+
+[data-testid="stDataFrame"] {
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, transparent);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.fz-card { overflow-x: auto; border: 1px solid color-mix(in srgb, var(--accent) 38%, transparent); border-radius: 12px; background: var(--surface); }
+.fz-table { width: 100%; border-collapse: collapse; font-size: .84rem; color: var(--ink); }
+.fz-table thead th { padding: 11px 16px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent-strong, var(--accent)); font: 700 .66rem 'DM Mono', monospace; letter-spacing: .09em; text-align: left; text-transform: uppercase; white-space: nowrap; }
+.fz-table tbody td { padding: 13px 16px; border-top: 1px solid var(--line); color: var(--ink); vertical-align: middle; }
+.fz-table tbody tr:hover td { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.fz-table .num { text-align: right; }
+.fz-table .mono { font-family: 'DM Mono', monospace; font-size: .8rem; }
+
+.fz-pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 11px; border-radius: 999px; background: color-mix(in srgb, var(--success) 15%, transparent); color: var(--success); font-size: .72rem; font-weight: 600; }
+.fz-pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.fz-pill.closed { background: color-mix(in srgb, var(--muted) 15%, transparent); color: var(--muted); }
+.fz-pill.filtered { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent-strong, var(--accent)); }
+.fz-tag { padding: 3px 9px; border-radius: 6px; background: var(--surface-raised, var(--raised)); color: var(--ink); font: 500 .78rem 'DM Mono', monospace; }
+
+.fz-risk { display: flex; align-items: center; gap: 12px; min-width: 170px; }
+.fz-risk-track { flex: 1; height: 6px; border-radius: 3px; background: var(--chart-track, var(--track)); overflow: hidden; }
+.fz-risk-fill { height: 100%; border-radius: 3px; background: var(--accent); }
+.fz-risk-value { min-width: 46px; text-align: right; font: 500 .8rem 'DM Mono', monospace; color: var(--ink); }
+
+.fz-footer { display: flex; justify-content: space-between; align-items: center; margin: .7rem 0 .4rem; color: var(--muted); font-size: .74rem; }
+
 [data-testid="stAlert"] { border-radius: 11px; }
 .app-footer { margin-top: 2.2rem; padding-top: 1rem; border-top: 1px solid var(--line); color: var(--muted); text-align: center; font: 500 .65rem 'DM Mono', monospace; letter-spacing: .03em; }
 .app-footer span { color: var(--accent); font-weight: 700; }
@@ -159,4 +186,4 @@ div[data-testid="stFormSubmitButton"] button:disabled { background: var(--accent
 [data-testid="stAppViewContainer"] > .main {
     position: relative;
     z-index: 1;
-} 
+}

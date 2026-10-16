@@ -99,6 +99,39 @@ def metric_card(label: str, value: str | int, note: str, accent: str) -> None:
     )
 
 
+def render_table(headers: list[str], rows: list[list[str]], numeric: tuple[int, ...] = ()) -> None:
+    """Render a styled HTML table. Cells in `rows` must already be HTML-escaped."""
+    head = "".join(
+        f'<th class="{"num" if i in numeric else ""}">{escape(h)}</th>' for i, h in enumerate(headers)
+    )
+    body = "".join(
+        "<tr>" + "".join(
+            f'<td class="{"num" if i in numeric else ""}">{cell}</td>' for i, cell in enumerate(row)
+        ) + "</tr>"
+        for row in rows
+    )
+    st.markdown(
+        f'<div class="fz-card"><table class="fz-table"><thead><tr>{head}</tr></thead>'
+        f"<tbody>{body}</tbody></table></div>",
+        unsafe_allow_html=True,
+    )
+
+
+def state_pill(state: object) -> str:
+    text = str(state)
+    kind = text.lower() if text.lower() in ("closed", "filtered") else ""
+    return f'<span class="fz-pill {kind}">{escape(text)}</span>'
+
+
+def risk_cell(score: float) -> str:
+    pct = max(0.0, min(100.0, float(score)))
+    return (
+        '<div class="fz-risk"><div class="fz-risk-track">'
+        f'<div class="fz-risk-fill" style="width:{pct:.1f}%"></div></div>'
+        f'<span class="fz-risk-value">{pct:.1f}%</span></div>'
+    )
+
+
 # Compact product header. The theme control is part of the page, not the Streamlit sidebar.
 brand_col, spacer_col, theme_col = st.columns([2.5, 5.4, 1.6], vertical_alignment="center")
 with brand_col:
@@ -225,10 +258,10 @@ if scan:
         with chart_col:
             average_risk = float(results["risk_score"].mean())
             average_risk = max(0.0, min(100.0, average_risk))
-            if average_risk >= 65:
+            if average_risk > 64:
                 gauge_color = "var(--danger)"
                 average_level = "High"
-            elif average_risk >= 35:
+            elif average_risk > 34:
                 gauge_color = "var(--warning)"
                 average_level = "Medium"
             else:
@@ -236,8 +269,8 @@ if scan:
                 average_level = "Low"
             section_heading("Average network risk", "Mean fuzzy-risk score across all returned port records.")
             st.markdown(
-                f'<div class="risk-gauge-card"><div class="risk-gauge" '
-                f'style="--risk-percent:{average_risk:.1f};--gauge-color:{gauge_color}">'
+                f'<div class="risk-gauge-card" style="--risk-percent:{average_risk:.1f};--gauge-color:{gauge_color}">'
+                '<div class="risk-gauge">'
                 f'<div class="risk-gauge-center"><strong>{average_risk:.1f}%</strong>'
                 f'<span>AVERAGE RISK</span></div></div>'
                 f'<div class="risk-gauge-level {average_level.lower()}">{average_level} average risk</div>'
@@ -256,10 +289,7 @@ if scan:
             )
 
         section_heading("Port inventory", "Inspect discovered ports and services. Per-port risk scores are summarized above.")
-        inventory_columns = ["port", "protocol", "state", "service", "product", "version", "extrainfo"]
-        if "/" in str(scan["target"]):
-            inventory_columns.insert(0, "host")
-        inventory_columns = [column for column in inventory_columns if column in results.columns]
+        inventory_columns = ["port", "protocol", "state", "service", "risk_score"]
         inventory = results[inventory_columns].copy()
         available_states = sorted(inventory["state"].dropna().astype(str).unique())
         filter_col, search_col = st.columns([1, 2])
@@ -269,20 +299,60 @@ if scan:
             search = st.text_input("Search inventory", placeholder="Host, service, state, or port…")
         filtered = inventory[inventory["state"].astype(str).isin(selected_states)].copy()
         if search:
-            mask = filtered.astype(str).apply(lambda column: column.str.contains(search, case=False, na=False)).any(axis=1)
+            search_columns = ["port", "protocol", "state", "service", "product", "version", "extrainfo"]
+            if "/" in str(scan["target"]):
+                search_columns.insert(0, "host")
+            search_columns = [column for column in search_columns if column in results.columns]
+            searchable = results.loc[filtered.index, search_columns]
+            mask = searchable.astype(str).apply(lambda column: column.str.contains(search, case=False, na=False)).any(axis=1)
             filtered = filtered[mask]
-        labels = {"host": "Host / IP", "port": "Port", "protocol": "Protocol", "state": "State", "service": "Service", "product": "Product", "version": "Version", "extrainfo": "Extra info"}
-        st.dataframe(filtered.rename(columns=labels), use_container_width=True, hide_index=True)
+        labels = {"port": "Port", "protocol": "Protocol", "state": "State", "service": "Service", "risk_score": "Fuzzy Risk Score"}
+
+        if filtered.empty:
+            st.info("No ports match the current filters.")
+        else:
+            render_table(
+                ["Port", "Protocol", "State", "Service", "Fuzzy risk score"],
+                [
+                    [
+                        f'<span class="mono">{escape(str(r.port))}</span>',
+                        f'<span class="mono">{escape(str(r.protocol))}</span>',
+                        state_pill(r.state),
+                        f'<span class="fz-tag">{escape(str(r.service))}</span>',
+                        risk_cell(r.risk_score),
+                    ]
+                    for r in filtered.itertuples()
+                ],
+            )
+        st.markdown(
+            f'<div class="fz-footer"><span>{len(filtered)} of {len(inventory)} ports shown</span></div>',
+            unsafe_allow_html=True,
+        )
+        export = filtered.rename(columns=labels)
+        export["Fuzzy Risk Score"] = export["Fuzzy Risk Score"].map(lambda score: f"{score:.1f}%")
         st.download_button(
             "↓  Export filtered CSV",
-            data=filtered.rename(columns=labels).to_csv(index=False).encode("utf-8"),
+            data=export.to_csv(index=False).encode("utf-8"),
             file_name="fuzzynmap-results.csv",
             mime="text/csv",
         )
 
 if st.session_state.scan_history:
     section_heading("Recent scans")
-    st.dataframe(pd.DataFrame(st.session_state.scan_history), use_container_width=True, hide_index=True)
+    render_table(
+        ["Time", "Target", "Port rows", "Open ports", "Duration"],
+        [
+            [
+                f'<span class="mono">{escape(str(h["Time"]))}</span>',
+                f'<span class="fz-tag">{escape(str(h["Target"]))}</span>',
+                f'<span class="mono">{h["Port rows"]}</span>',
+                f'<span class="mono">{h["Open ports"]}</span>',
+                f'<span class="mono">{escape(str(h["Duration"]))}</span>',
+            ]
+            for h in st.session_state.scan_history
+        ],
+        numeric=(2, 3, 4),
+    )
 
 st.markdown(
     '<footer class="app-footer"><span>FUZZYNMAP</span> · Use only on systems you are authorized to assess.</footer>',

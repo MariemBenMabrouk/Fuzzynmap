@@ -1,31 +1,26 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE nmaprun>
 <?xml-stylesheet href="file:///usr/bin/../share/nmap/nmap.xsl" type="text/xsl"?>
-<!-- Nmap 7.95 scan initiated Thu Oct 15 22:45:23 2026 as: nmap -n -Pn -sT -T4 -&#45;open -p 1-10000 -oX /app/data/scan_results/latest_scan.xml 192.168.1.11 -->
-<nmaprun scanner="nmap" args="nmap -n -Pn -sT -T4 -&#45;open -p 1-10000 -oX /app/data/scan_results/latest_scan.xml 192.168.1.11" start="1792104323" startstr="Thu Oct 15 22:45:23 2026" version="7.95" xmloutputversion="1.05">
+<!-- Nmap 7.95 scan initiated Fri Oct 16 20:48:16 2026 as: nmap -n -Pn -sT -T4 -&#45;open -p 1-10000 -oX /app/data/scan_results/latest_scan.xml 192.168.1.11 -->
+<nmaprun scanner="nmap" args="nmap -n -Pn -sT -T4 -&#45;open -p 1-10000 -oX /app/data/scan_results/latest_scan.xml 192.168.1.11" start="1792183696" startstr="Fri Oct 16 20:48:16 2026" version="7.95" xmloutputversion="1.05">
 <scaninfo type="connect" protocol="tcp" numservices="10000" services="1-10000"/>
 <verbose level="0"/>
 <debugging level="0"/>
-<host starttime="1792104323" endtime="1792104349"><status state="up" reason="user-set" reason_ttl="0"/>
+<host starttime="1792183696" endtime="1792183730"><status state="up" reason="user-set" reason_ttl="0"/>
 <address addr="192.168.1.11" addrtype="ipv4"/>
 <hostnames>
 </hostnames>
-<ports><extraports state="filtered" count="9992">
-<extrareasons reason="no-response" count="9992" proto="tcp" ports="1-134,136,138,140-444,446-901,903-911,913-5039,5041-7679,7681-10000"/>
-</extraports>
-<extraports state="closed" count="1">
-<extrareasons reason="conn-refused" count="1" proto="tcp" ports="137"/>
+<ports><extraports state="filtered" count="9995">
+<extrareasons reason="no-response" count="9995" proto="tcp" ports="1-134,136-138,140-444,446-901,903-911,913-10000"/>
 </extraports>
 <port protocol="tcp" portid="135"><state state="open" reason="syn-ack" reason_ttl="0"/><service name="msrpc" method="table" conf="3"/></port>
 <port protocol="tcp" portid="139"><state state="open" reason="syn-ack" reason_ttl="0"/><service name="netbios-ssn" method="table" conf="3"/></port>
 <port protocol="tcp" portid="445"><state state="open" reason="syn-ack" reason_ttl="0"/><service name="microsoft-ds" method="table" conf="3"/></port>
 <port protocol="tcp" portid="902"><state state="open" reason="syn-ack" reason_ttl="0"/><service name="iss-realsecure" method="table" conf="3"/></port>
 <port protocol="tcp" portid="912"><state state="open" reason="syn-ack" reason_ttl="0"/><service name="apex-mesh" method="table" conf="3"/></port>
-<port protocol="tcp" portid="5040"><state state="open" reason="syn-ack" reason_ttl="0"/></port>
-<port protocol="tcp" portid="7680"><state state="open" reason="syn-ack" reason_ttl="0"/><service name="pando-pub" method="table" conf="3"/></port>
 </ports>
-<times srtt="7567" rttvar="3914" to="100000"/>
+<times srtt="11009" rttvar="8017" to="100000"/>
 </host>
-<runstats><finished time="1792104349" timestr="Thu Oct 15 22:45:49 2026" summary="Nmap done at Thu Oct 15 22:45:49 2026; 1 IP address (1 host up) scanned in 26.51 seconds" elapsed="26.51" exit="success"/><hosts up="1" down="0" total="1"/>
+<runstats><finished time="1792183730" timestr="Fri Oct 16 20:48:50 2026" summary="Nmap done at Fri Oct 16 20:48:50 2026; 1 IP address (1 host up) scanned in 34.05 seconds" elapsed="34.05" exit="success"/><hosts up="1" down="0" total="1"/>
 </runstats>
 </nmaprun>

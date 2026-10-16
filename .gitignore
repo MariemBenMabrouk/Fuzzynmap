@@ -1,7 +1,13 @@
+
+.env
+.env.*
+!.env.example
 .venv/
+venv/
 __pycache__/
 *.py[cod]
 .pytest_cache/
-.env
-.streamlit/
+.streamlit/secrets.toml
+data/scan_results/
+*.xml
 .DS_Store
