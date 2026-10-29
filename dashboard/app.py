@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from fuzzynmap.detector import analyze_xml
 from fuzzynmap.scanner import scan_target
+from fuzzynmap.type2_fuzzy import score_port_interval
 
 st.set_page_config(
     page_title="Fuzzynmap · Network Risk",
@@ -82,6 +83,27 @@ def validate_target(value: str) -> tuple[bool, str]:
     ):
         return False, "That doesn't look like a valid hostname or IP address."
     return True, ""
+
+
+def add_type2_risk_intervals(results: pd.DataFrame) -> pd.DataFrame:
+    if results.empty or "type2_risk_interval" in results.columns:
+        return results
+
+    results = results.copy()
+    intervals = results.apply(
+        lambda row: score_port_interval(
+            int(row["port"]),
+            str(row["state"]),
+            str(row["service"]),
+            str(row["product"]),
+            str(row["version"]),
+        ),
+        axis=1,
+    )
+    results["type2_risk_interval"] = intervals.map(
+        lambda bounds: f"[{bounds[0]:.2f}% – {bounds[1]:.2f}%]"
+    )
+    return results
 
 
 def section_heading(title: str, subtitle: str = "") -> None:
@@ -195,7 +217,7 @@ if submitted:
             scan_target(target, output_path)
             if not output_path.is_file() or output_path.stat().st_size == 0:
                 raise RuntimeError("Nmap did not create a non-empty XML result.")
-            results = analyze_xml(output_path)
+            results = add_type2_risk_intervals(analyze_xml(output_path))
             duration = time.perf_counter() - started
             timestamp = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S %Z").strip()
             st.session_state.latest_scan = {
@@ -225,7 +247,8 @@ if scan:
         f'<span>{scan["duration"]:.1f} sec</span></div>',
         unsafe_allow_html=True,
     )
-    results = scan["results"]
+    results = add_type2_risk_intervals(scan["results"])
+    scan["results"] = results
     if results.empty:
         st.info(scan.get("message") or "No individual port records were returned.")
     else:
@@ -289,7 +312,14 @@ if scan:
             )
 
         section_heading("Port inventory", "Inspect discovered ports and services. Per-port risk scores are summarized above.")
-        inventory_columns = ["port", "protocol", "state", "service", "risk_score"]
+        inventory_columns = [
+            "port",
+            "protocol",
+            "state",
+            "service",
+            "risk_score",
+            "type2_risk_interval",
+        ]
         inventory = results[inventory_columns].copy()
         available_states = sorted(inventory["state"].dropna().astype(str).unique())
         filter_col, search_col = st.columns([1, 2])
@@ -306,13 +336,27 @@ if scan:
             searchable = results.loc[filtered.index, search_columns]
             mask = searchable.astype(str).apply(lambda column: column.str.contains(search, case=False, na=False)).any(axis=1)
             filtered = filtered[mask]
-        labels = {"port": "Port", "protocol": "Protocol", "state": "State", "service": "Service", "risk_score": "Fuzzy Risk Score"}
+        labels = {
+            "port": "Port",
+            "protocol": "Protocol",
+            "state": "State",
+            "service": "Service",
+            "risk_score": "Type 1 Fuzzy Risk Score",
+            "type2_risk_interval": "Type 2 Risk Interval",
+        }
 
         if filtered.empty:
             st.info("No ports match the current filters.")
         else:
             render_table(
-                ["Port", "Protocol", "State", "Service", "Fuzzy risk score"],
+                [
+                    "Port",
+                    "Protocol",
+                    "State",
+                    "Service",
+                    "Type 1 Fuzzy Risk Score",
+                    "Type 2 Risk Interval",
+                ],
                 [
                     [
                         f'<span class="mono">{escape(str(r.port))}</span>',
@@ -320,6 +364,7 @@ if scan:
                         state_pill(r.state),
                         f'<span class="fz-tag">{escape(str(r.service))}</span>',
                         risk_cell(r.risk_score),
+                        f'<span class="mono">{escape(str(r.type2_risk_interval))}</span>',
                     ]
                     for r in filtered.itertuples()
                 ],
@@ -329,7 +374,7 @@ if scan:
             unsafe_allow_html=True,
         )
         export = filtered.rename(columns=labels)
-        export["Fuzzy Risk Score"] = export["Fuzzy Risk Score"].map(lambda score: f"{score:.1f}%")
+        export["Type 1 Fuzzy Risk Score"] = export["Type 1 Fuzzy Risk Score"].map(lambda score: f"{score:.1f}%")
         st.download_button(
             "↓  Export filtered CSV",
             data=export.to_csv(index=False).encode("utf-8"),

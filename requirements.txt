@@ -8,3 +8,4 @@ streamlit==1.39.0
 matplotlib==3.9.2
 pytest==8.3.3
 pyarrow>=14,<20
+pyit2fls
